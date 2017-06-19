@@ -18,8 +18,8 @@ source("SIR-functions.R")
 # separate script.
 
 n_days <- 100 # time frame (in days) of model
-n_people <- 1000
-n_cities <- 1000
+n_people <- 100
+n_cities <- 10
 beta <-0.2
 days_infectious <- 5 # days spent infectious on average
 
@@ -31,6 +31,9 @@ city <- makeCity(n_people, n_time = n_days,
                  seed_infectious = start_infectious,
                  n_cities = n_cities)
 
+movement <- oneStepMovingMatrix(n.cities = n_cities,
+                                max.people = 5)
+infectionByMovement(movement, city)
 # RUN MODEL ----------------------------------------------------------------
 itr <- 12
 out_raw <- map(1:itr, function(x){

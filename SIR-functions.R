@@ -42,7 +42,7 @@ numberOfNewR <- function(I, time_in_I){
 simOneTimeStep<- function(x,
                           time_in_I = days_infectious){
   # In this function we infect people from within-city transmission.
-
+  
   # If there are no Infected in all cities, nothing can happen so we
   # simply increment the day by 1 and end the loop.
   if(all(x$num_I==0)){
@@ -84,6 +84,64 @@ loopOverDays <- function(x = city,
   }
   return(x)
 }
+
+
+oneStepMovingMatrix <- function(n.cities = n_cities, max.people = max.people){
+  #Function will create a data.frame that holds infomation about:
+  #The sending city
+  #The receiving city
+  #The number of people moved
+  movement <- data.frame(sending = sample(1:n.cities, n_cities, replace = TRUE),
+                         receiving = sample(1:n.cities, n_cities, replace = TRUE),
+                         n.people = sample(1:max.people, n_cities, replace = TRUE))
+  #indexing the cases where the a city is sending people to themself
+  inx <- which(movement$sending == movement$receiving)
+  if(length(inx)>0){
+    #if the city is not the last city, increment the receiving city with one
+    if(movement$receiving[inx] < n.cities) movement$receiving[inx] + 1
+    #if the city is not the last city, decrese the receiving city with one
+    if(movement$receiving[inx] >= 1) movement$receiving[inx] - 1
+  }
+  return(movement)
+}
+
+
+probAtMovement <- function(prev = prevalence, n.moved = n.moved){
+  prob <- 1 - (1 - prev)^n.moved
+  return(prob)
+}
+
+
+infectionByMovement <- function(mM = movementMatrix, cities = cities, prev = 0.1){
+  browser()
+  #index of infectet cities
+  infect.id <- cities$city_id[which(cities$num_S>0)]
+  for(i in 1:length(infect.id)){
+    #Index on reciving town
+    inx.move <- mM$sending==infect.id[i]
+    #initialzing the temp.storage for the movement
+    rec.temp.store <- mM[inx.move,]
+    
+    rec.temp.store$tot_animal <- ave(rec.temp.store$n.people,
+                                     rec.temp.store$receiving, 
+                                     FUN = function(x) sum(x))
+    #getting rid of duplicates
+    rec.temp.store[!(duplicated(rec.temp.store$receiving)), ]
+    #calculating the prob. for an infection due to movement
+    rec.temp.store$porb <- probAtMovement(prev, rec.temp.store$tot_animal)
+    #see if there is a spread of infection
+    rec.temp.store$newInfected <- rbinom(length(rec.temp.store$porb), 1, rec.temp.store$porb)==1
+  }
+  return()
+}
+
+
+
+
+
+
+
+
 
 
 
@@ -150,9 +208,9 @@ makeCity <- function(n_people, n_time, seed_infectious,
 
 plotCitiesOverTime <- function(out) {
   ggplot() +
-  geom_line(data = out,
-            aes(x = day, y = I, group = interaction(city_id, itr)),
-            alpha = 0.01,
-            col = "darkred") +
-  theme_minimal()
+    geom_line(data = out,
+              aes(x = day, y = I, group = interaction(city_id, itr)),
+              alpha = 0.01,
+              col = "darkred") +
+    theme_minimal()
 }
