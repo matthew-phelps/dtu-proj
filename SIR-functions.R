@@ -41,6 +41,7 @@ numberOfNewR <- function(I, time_in_I){
 
 simOneTimeStep<- function(x,
                           time_in_I = days_infectious){
+  # browser()
   # In this function we infect people from within-city transmission.
   
   # If there are no Infected in all cities, nothing can happen so we
@@ -71,16 +72,28 @@ simOneTimeStep<- function(x,
 loopOverDays <- function(x = city,
                          n_steps = n_days,
                          n_cities = n_cities){
-  # Function to loop over all time-steps. Is vectorized with respected to
-  # multiple cities - i.e. internal transmission in all cities will be updated
-  # at the same time in this function.
+  # Function to loop over all time-steps.
+  # Two steps happen during each iteration of this loop:
+  # 1. Internal transmission and updates
+  # 2. Move people between cities
+  
+  # Function is vectorized with respected to multiple cities - i.e. internal
+  # transmission in all cities will be updated at the same time in this
+  # function.
+  
   for(i in 1:n_steps){
-    
-    # Subset row of current time-step to pass to simOneTimeStep().
+    browser()
+    # Subset row of current time-step.
     sub_x <- x[x$day==i, ]
     
-    # Results of function are insterted at row correspoinding to t + 1.
-    x[x$day == (i + 1), ] <- simOneTimeStep(x = sub_x)
+    # Step 1 - updates from internal transmission
+     tmp  <- simOneTimeStep(x = sub_x)
+     
+     tmp$n_move <- rpois(n_cities, 0.05*tmp$tot_N)
+     
+    x[x$day == (i + 1), ]
+    oneStepMovingMatrix(n.cities = n_cities, max.people = max.people)
+    infectionByMovement(sub_x)
   }
   return(x)
 }
@@ -192,22 +205,38 @@ cumInfected <- function(x){
 # Other helper functions
 
 makeCity <- function(n_people, n_time, seed_infectious,
-                     n_cities){
+                     n_cities, n_ppl){
   # browser()
-  out<- lapply(1:n_cities, function(x) {
+  out<- lapply(1:n_cities, function(i) {
     out <- data.frame(day = 1:n_time,
-                      num_S = n_people - seed_infectious,
+                      num_S = n_ppl[i] - seed_infectious,
                       num_I = seed_infectious,
                       new_I = 0,
                       num_R = 0,
-                      city_id = x)
+                      tot_N = n_ppl[i],
+                      city_id = i)
     out[2:n_time, c("num_S", "num_I", "new_I", "num_R")] <- NA
     out
   })
   out <- do.call(rbind.data.frame, out)
 }
 
-
+makeCityContactMatrix <- function(n_cities){
+  # This function creates a weight matrix describing the contact between all
+  # city-pairs. Matrix is symmetric since we are assuming a symmetric flow of
+  # people b/w cities. The columns represent sending weights, and the rows
+  # represent receiving weights.
+  
+  made_up_data <- rpois(n_cities*n_cities, lambda =  10 )
+  city_contact_matrix <- matrix(data = made_up_data, n_cities, n_cities)
+  
+  # Set diagnols to 0 since city will not send to itself
+  diag(city_contact_matrix) <- 0
+  
+  # Normalize matrix column-wise so each column adds to 1.0
+  city_contact_matrix <- sweep(city_contact_matrix, 2, colSums(city_contact_matrix), FUN="/")
+  city_contact_matrix
+}
 
 plotCitiesOverTime <- function(out) {
   ggplot() +
