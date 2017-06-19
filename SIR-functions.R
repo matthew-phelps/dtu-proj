@@ -91,12 +91,15 @@ oneStepMovingMatrix <- function(n.cities = n_cities, max.people = max.people){
   #The sending city
   #The receiving city
   #The number of people moved
-  movement <- data.frame(sending = sample(1:n.cities, n_cities, replace = TRUE),
-                         receiving = sample(1:n.cities, n_cities, replace = TRUE),
-                         n.people = sample(1:max.people, n_cities, replace = TRUE))
+  movement <- data.frame(sending = sample(1:n.cities, n.cities, replace = FALSE),
+                         receiving = sample(1:n.cities, n.cities, replace = TRUE),
+                         n.people = sample(1:max.people, n.cities, replace = TRUE))
   #indexing the cases where the a city is sending people to themself
   inx <- which(movement$sending == movement$receiving)
   if(length(inx)>0){
+    # This might be a problem if there are multiple cities seeding itself. What
+    # happens if both the first and the last city seed themselves?
+    
     #if the city is not the last city, increment the receiving city with one
     if(movement$receiving[inx] < n.cities) movement$receiving[inx] + 1
     #if the city is not the last city, decrese the receiving city with one
