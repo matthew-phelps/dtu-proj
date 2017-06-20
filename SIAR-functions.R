@@ -52,7 +52,7 @@ loopOverDays <- function(x = city,
 simOneTimeStep<- function(x,
                           time_in_I = days_infectious,
                           time_in_A = days_asymptomatic){
-  # browser()
+  browser()
   # In this function we infect people from within-city transmission.
   
   # If there are no Infected in all cities, nothing can happen so we
@@ -109,7 +109,7 @@ numberOfNewI <- function(beta_I, beta_A,
   # If we select more I than there are S -> set I to equal S
   inx <- out > S
   if(any(inx)){
-    browser()
+    # browser()
     out[inx] <- S[inx]
   }
   
@@ -196,9 +196,7 @@ moveAsymptomatic <- function(step1_output,
   move_counter <- list()
   move_counter <- lapply(1:nrow(tmp), function(k){
     # browser()
-    if(inx[k]){
-      return(0)
-    }
+
     return(sample(1:n_cities, tmp$n_move_out[k],
                   replace = TRUE,
                   prob = contact_matrix[, k]))
@@ -209,11 +207,9 @@ moveAsymptomatic <- function(step1_output,
   new_I_each_city <- data.frame(table(move_counter))
   
   # Add Infected to RECEIVING cities 
-  tmp <- merge(tmp, new_I_each_city,
-               by.x = "city_id",
-               by.y = "move_counter", all.x = TRUE)
-  tmp$num_A <- rowSums(tmp[, c("num_A", "Freq")], na.rm = TRUE)
-  tmp$Freq <- NULL
+  # browser()
+  inx <- tmp$city_id %in% new_I_each_city$move_counter
+  tmp$num_I[inx] <- new_I_each_city$Freq + tmp$num_I[inx]
   # stopifnot(sum(tmp$n_move_out) == sum(tmp2$Freq, na.rm = TRUE))
   
   return(tmp)
@@ -324,6 +320,7 @@ plotCitiesOverTime <- function(out, alpha = alpha) {
                   group = interaction(city_id, itr),
                   col = as.factor(city_id)),
               alpha = alpha) +
-    theme_minimal()
+    theme_minimal() +
+    theme(legend.position = "none")
 }
 
