@@ -8,7 +8,7 @@ source("SIR-functions.R")
 # 1. Infect and update within each city due to internal transmission
 # 2. Move people between cities and update each city's population
 
-# This script is for step 1.
+# This script will run both steps inside "loopOverDays()" 
 
 
 
