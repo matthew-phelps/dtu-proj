@@ -1,5 +1,6 @@
-# This file contains all the functions to run the model for within-city
-# infection. It is called by the "run-SIR-within.R" script. There are 3 sections of functions - SIMULATION, DATA WRANGLING, and MISCELLANEOUS
+# This file contains all the functions to run the model for the SIR model of
+# infection. It is called by the "run-SIR-within.R" script. There are 4 sections
+# of functions - SIMULATION, DATA WRANGLING, MOVING PEOPLE and MISCELLANEOUS
 
 
 # SIMULATION --------------------------------------------------------------
