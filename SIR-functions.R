@@ -150,7 +150,7 @@ moveInfected <- function(step1_output, n_cities, contact_matrix,
   
   # Summarize how many times a city receives an Infected person
   new_I_each_city <- data.frame(table(move_counter))
-  browser()
+  #browser()
   # Add Infected to RECEIVING cities 
   inx <- tmp$city_id %in% new_I_each_city$move_counter
   tmp$num_I[inx] <- new_I_each_city$Freq + tmp$num_I[inx]
