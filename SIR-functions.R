@@ -142,10 +142,6 @@ moveInfected <- function(step1_output, n_cities, contact_matrix,
   inx <- tmp[, "n_move_out"] == 0
   move_counter <- list()
   move_counter <- lapply(1:nrow(tmp), function(k){
-    # browser()
-    if(inx[k]){
-      return(0)
-    }
     return(sample(1:n_cities, tmp$n_move_out[k],
            replace = TRUE,
            prob = contact_matrix[, k]))
@@ -154,13 +150,10 @@ moveInfected <- function(step1_output, n_cities, contact_matrix,
   
   # Summarize how many times a city receives an Infected person
   new_I_each_city <- data.frame(table(move_counter))
-  
+  browser()
   # Add Infected to RECEIVING cities 
-  tmp <- merge(tmp, new_I_each_city,
-               by.x = "city_id",
-               by.y = "move_counter", all.x = TRUE)
-  tmp$num_I <- rowSums(tmp[, c("num_I", "Freq")], na.rm = TRUE)
-  tmp$Freq <- NULL
+  inx <- tmp$city_id %in% new_I_each_city$move_counter
+  tmp$num_I[inx] <- new_I_each_city$Freq + tmp$num_I[inx]
   # stopifnot(sum(tmp$n_move_out) == sum(tmp2$Freq, na.rm = TRUE))
 
   return(tmp)
