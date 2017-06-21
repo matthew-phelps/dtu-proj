@@ -27,6 +27,12 @@ asymptomatic_ratio <- 3 # corresponds to 75% asymptomatic
 
 set.seed(19)
 cities_population_vec <- round(rlnorm(100, meanlog = 6.2, sdlog = 1.9))
+cities_population_vec <- cities_population_vec + 1000
+city_locations <- data.frame(city_id = 1:n_cities,
+                             x_val = rnorm(n_cities, 724354, sd = 1000),
+                             y_val = rnorm(n_cities, 6175803, sd = 1000)
+)
+
 
 # MAKE CITIES --------------------------------------------------------
 
@@ -62,14 +68,16 @@ out <- prettyOutput(out_raw, itr, n_days, n_cities)
 plot1 <- plotCitiesOverTime(out, alpha = .5)
 ggplotly(plot1)
 
-#
-cum_I <- cumInfected(out_raw)
-hist(cum_I)
 
-city_locations <- data.frame(city_id = 1:n_cities,
-           x_val = rnorm(n_cities, 724354, sd = 1000),
-           y_val = rnorm(n_cities, 6175803, sd = 1000)
-)
+cum_I <- summarizeCityI(out)
 
-
+city_sum <- merge(city, city_locations, by = "city_id")
+city_sum <- city_sum[!duplicated(city_sum$city_id), ]
+ggplot() +
+  geom_point(data = city_sum,
+             aes(x = x_val, y = y_val, size = tot_N))
 plot(city_locations$x_val, city_locations$y_val)
+
+
+
+

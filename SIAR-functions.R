@@ -9,7 +9,7 @@
 loopOverDays <- function(x = city,
                          n_steps = n_days,
                          n_cities = n_cities,
-                         frac_travel,
+                         frac_travel, fake = FALSE,
                          ...){
   # Function to loop over all time-steps.
   # Two steps happen during each iteration of this loop:
@@ -19,28 +19,36 @@ loopOverDays <- function(x = city,
   # Function is vectorized with respected to multiple cities - i.e. internal
   # transmission in all cities will be updated at the same time in this
   # function.
-  contact_matrix <- makeCityContactMatrix(n_cities)
+  contact_matrix <- makeCityGravityMatrix(n_cities = n_cities,
+                                          dist_mat = dist_mat)
+  if(fake) contact_matrix <- makeCityContactMatrix(n_cities)
   # browser()
   for(i in 1:n_steps){
     
     
     # Step 1 - updates from internal transmission for day i
-    step1_output  <- simOneTimeStep(x = x[x$day==i, ],
-                                    time_in_A = days_asymptomatic)
-    # browser()
-    
-    
-    # Step 2 - Move Infected
-    if(any(step1_output$num_I >0)){
-      # If there are any infected -> move them between cities
+    if(any(x[x$day==i, "num_I"] >0)){
+      # If there are any infected -> run simulation
+      step1_output  <- simOneTimeStep(x = x[x$day==i, ],
+                                      time_in_A = days_asymptomatic)
+      
+      # Make sure sensible numbers
+      stopifnot(!any(step1_output$num_I > step1_output$tot_N))
+      
+      # Step 2 - Move Infected
       step2_output <- moveAsymptomatic(step1_output = step1_output,
                                        n_cities = n_cities,
                                        contact_matrix,
                                        frac_travel = frac_travel)
       # Increment by 1 timse-step
       x[x$day == (i + 1), ] <- step2_output
-    } else {
-      x[x$day == (i + 1), ] <- step1_output
+      
+    }else{
+      # browser()
+      # If no infected left in system, simply increment by 1 days
+      inx <- which(names(x) %in% ("day"))
+      x[x$day == (i + 1), -inx] <- x[x$day == i, -inx]
+      
     }
     
   }
@@ -52,7 +60,7 @@ loopOverDays <- function(x = city,
 simOneTimeStep<- function(x,
                           time_in_I = days_infectious,
                           time_in_A = days_asymptomatic){
-  browser()
+  # browser()
   # In this function we infect people from within-city transmission.
   
   # If there are no Infected in all cities, nothing can happen so we
@@ -117,7 +125,7 @@ numberOfNewI <- function(beta_I, beta_A,
 }
 
 numberOfNewA <- function(x){
-
+  
   A <- 3 * x$new_I
   max_A <- x$num_S - x$new_I
   inx <- A > max_A
@@ -196,7 +204,7 @@ moveAsymptomatic <- function(step1_output,
   move_counter <- list()
   move_counter <- lapply(1:nrow(tmp), function(k){
     # browser()
-
+    
     return(sample(1:n_cities, tmp$n_move_out[k],
                   replace = TRUE,
                   prob = contact_matrix[, k]))
@@ -214,6 +222,18 @@ moveAsymptomatic <- function(step1_output,
   
   return(tmp)
 }
+
+
+calcDist <- function(x1, x2, y1, y2) sqrt((x1 - x2) ^ 2 + (y1 - y2)^2)
+
+gravityCalc <- function(pop1, pop2, d, decay){
+  # This function calculates the relative contact between two cities
+  # based upon the population of the two cities and the distance separating
+  # them.
+  (pop1 * pop2) / d^decay
+}
+
+
 
 # DATA WRANGLING ----------------------------------------------------------
 
@@ -236,6 +256,9 @@ prettyOutput <- function(x, itr, n_days, n_cities){
   out$new_I <- lapply(x, "[[", "new_I") %>%
     unlist()
   
+  out$tot_N <- lapply(x, "[[", "tot_N") %>%
+    unlist()
+  
   out$city_id <- lapply(x, "[[", "city_id") %>%
     unlist()
   
@@ -256,6 +279,25 @@ cumInfected <- function(x){
     unlist()
 }
 
+
+
+# SUMMARY FUNCTIONS -------------------------------------------------------
+
+summarizeCityI <- function(x){
+  # browser()
+  out <- split(x, list(x$city_id, x$itr))
+  x <- lapply(out, function(x) sum(x$new_I)) %>%
+    unlist()%>%
+    data.frame(cum_newI = .,
+               tot_N = x[!duplicated(x$city_id), "tot_N"],
+               city_id = 1:n_cities,
+               itr = rep(1:itr, each = n_cities)) %>%
+    `rownames<-`(NULL)
+  x$max_day_I <- lapply(out, function(x) max(x$I)) %>%
+    unlist()
+  x$cumAR <- round(x$cum_newI / x$tot_N, digits = 2)
+  return(x)
+}
 
 
 # MISCELLANEOUS FUNCTIONS --------------------------------------------------
@@ -312,6 +354,48 @@ makeCityContactMatrix <- function(n_cities){
                                FUN="/")
   return(city_contact_matrix)
 }
+
+
+makeCityGravityMatrix <- function(n_cities,
+                                  pop_vec = cities_population_vec,
+                                  dist_mat,
+                                  decay = 2){
+  # This function creates a matrix showing the normalized contact between all
+  # city-pairs.
+  # browser()
+  
+  # Calculate the distance matrix describing each city-pair
+  dist_mat <- matrix(data = NA, nrow = n_cities, ncol = n_cities)
+  dist_mat <- lapply(1:n_cities, function(i){
+    calcDist(x1 = city_locations$x_val[i],
+             x2 = city_locations$x_val,
+             y1 = city_locations$y_val[i],
+             y2 = city_locations$y_val)
+  })%>%
+    do.call(rbind.data.frame, .) %>%
+    `colnames<-`(paste("v", 1:n_cities, sep = ""))
+  
+  # Apply gravityCal() to each city pair
+  out <- lapply(1:n_cities, function(i){
+    gravityCalc(pop_vec[i], pop_vec,
+                d = dist_mat[, i], decay = decay)
+    
+  }) 
+  
+  # Reshape and rename columns
+  contact_matrix <- do.call(rbind.data.frame, out) %>%
+    `diag<-` (0) %>%
+    `colnames<-`(paste("v", 1:n_cities, sep = ""))
+  
+  # Normalize so that each column sums to 1
+  contact_matrix <- sweep(contact_matrix,
+                          2,
+                          colSums(contact_matrix),
+                          FUN="/")
+  
+  return(contact_matrix)
+}
+
 
 plotCitiesOverTime <- function(out, alpha = alpha) {
   ggplot() +
