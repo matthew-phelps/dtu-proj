@@ -27,7 +27,7 @@ prob <- function(prev, N){
 herd[c(4, 10), "status"] <- I
 
 simInfect <- function(x = herd, move = m){
-  
+  browser()
   inx_inf <- x[, "status"] == I
   id_infect <- x[inx_inf, "id"]
   new_inf <- numeric(sum(inx_inf))
@@ -59,3 +59,4 @@ out <- numeric(100)
 for(j in 1:100){
   out[j] <- (simInfect())
 }
+
