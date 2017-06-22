@@ -3,3 +3,7 @@
 .RData
 .Ruserdata
 .Rproj
+gif/
+.DS_Store
+
+*.gif
