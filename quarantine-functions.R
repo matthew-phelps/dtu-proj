@@ -3,8 +3,8 @@
 ## version .01
 # 20.06.17
 
-######------- use the day column
-
+library(reshape2)
+library(ggplot2)
 ###### Quarantine of City function ######
 #The following code will
 
@@ -37,27 +37,28 @@ makeQuarantineList <-function(n.cities = n.cities){
                            quara = rep(x = FALSE, n.cities))
 }
 
-determineInfectFreq <- function(x, inx.quara){
+determineInfectlevel <- function(x, inx.quara, h.level = 50, l.level = 10){
+  #browser()
+  m.level = round(mean(c(h.level,l.level)))
   #number of infected in a given city
-  temp.store.infec  <- sum(x$num_I[x$city_id==inx.quara],x$new_I[x$id==inx.quara])
-  #all people in a city
-  temp.store.n.city <- sum(temp.store.infec, x$tot_N)
-  #the freq of infection
-  infec.freq <- temp.store.infec/temp.store.n.city
-  return(infec.freq)
+  n.infec  <- sum(x$num_I[x$city_id==inx.quara],x$new_I[x$city_id==inx.quara], na.rm = TRUE)
+  if(n.infec >= h.level){
+    infect.level = 2
+  }
+  else if(n.infec >= m.level){
+    infect.level = 1
+  }
+  else{
+    infect.level = 0
+  }
+  return(infect.level)
 }
 
-bleedingOfCity <- function(city, quarantine, inx.quara = inx.quara, security.level = security.level){
-  n.people <- city$tot_N
-  ### use an appropriate selection
-  
-}
 
-
-putCityUnderQuarantine <- function(x = city,start.threshold = 50, end.threshold = 20){
+putCityUnderQuarantine <- function(x = city, start.threshold = 50, end.threshold = 20){
   #Determine which cities are under quarantine
   #browser()
-  
+  #level of infection in all, non quarantined, cites
   inx.quara <- which(x$in.quara == 1)
   if(length(inx.quara)>0){
     for(i in 1:length(inx.quara)){
@@ -66,11 +67,14 @@ putCityUnderQuarantine <- function(x = city,start.threshold = 50, end.threshold 
       #evaluation of the quarantine should be lifted
       infect.in.city <- sum(x$num_I[x$city_id == inx.quara[i]],x$new_I[x$city_id == inx.quara[i]])
       if(infect.in.city < end.threshold){
+       # browser()
         x$in.quara[x$city_id == inx.quara[i]] <- FALSE
+        x$sec.level[x$city_id == inx.quara[i]] = determineInfectlevel(x, inx.quara[i], 
+                                                                       h.level = start.threshold, l.level = end.threshold)
       }
     }
   }
-  #evaluate freq of infection in all, non quarantined, cites
+  #level of infection in all, non quarantined, cites
   inx.non.quara <- which(!x$in.quara)
   if(length(inx.non.quara)>0){
   #look at which cities have a high enough level of infection to be put under quarantine
@@ -80,6 +84,9 @@ putCityUnderQuarantine <- function(x = city,start.threshold = 50, end.threshold 
       infect.in.city <- sum(x$num_I[x$city_id == inx.non.quara[i]],x$new_I[x$city_id == inx.non.quara[i]])
       if(infect.in.city >= start.threshold){
         x$in.quara[x$city_id == inx.non.quara[i]] <- TRUE
+        #browser()
+        x$sec.level[x$city_id == inx.non.quara[i]] = determineInfectlevel(x, inx.non.quara[i], 
+                                                                           h.level = start.threshold, l.level = end.threshold)
       }
     }
   }
@@ -105,7 +112,7 @@ numberOfNewI <- function(beta, I, S, N){
   # If we randomly select more I than there are S -> set I to equal S
   inx <- out > S
   if(any(inx)){
-    browser()
+    #browser()
     out[inx] <- S[inx]
   }
   
@@ -164,7 +171,9 @@ simOneTimeStep<- function(x,
 loopOverDays <- function(x = city,
                          n_steps = n_days,
                          n_cities = n_cities,
-                         frac_travel){
+                         frac_travel,
+                         start.quarantine, 
+                         end.quarantine){
   # Function to loop over all time-steps.
   # Two steps happen during each iteration of this loop:
   # 1. Internal transmission and updates
@@ -181,7 +190,10 @@ loopOverDays <- function(x = city,
     
     #check if any cities needs to go under quarantine
     #browser()
-    step1_output <- putCityUnderQuarantine(step1_output)
+    step1_output <- putCityUnderQuarantine(step1_output,
+                                           start.threshold = start.quarantine, 
+                                           end.threshold  = end.quarantine
+                                           )
     
     contact_matrix <- makeCityContactMatrix(n_cities, cities = step1_output)
     
@@ -272,7 +284,10 @@ prettyOutput <- function(x, itr, n_days, n_cities){
   
   out$city_id <- lapply(x, "[[", "city_id") %>%
     unlist()
-  
+  out$in.quara <- lapply(x, "[[", "in.quara") %>%
+    unlist()
+  out$sec.level <- lapply(x, "[[", "sec.level") %>%
+    unlist()
   out$itr <- rep(1:itr, each = n_days*n_cities)
   out$day <- rep(1:n_days)
   
@@ -283,7 +298,7 @@ prettyOutput <- function(x, itr, n_days, n_cities){
 cumInfected <- function(x){
   # Get the cummulative number of infected per city per iteration.
   lapply(x, function(x){
-    # browser()
+    #browser()
     x$cum_sum <- ave(x$new_I, x$city_id, FUN = sum)
     x$cum_sum[!duplicated(x$city_id)]
   }) %>%
@@ -307,9 +322,10 @@ makeCity <- function(n_people, n_time, seed_infectious,
                       new_I = 0,
                       num_R = 0,
                       tot_N = n_ppl[i],
-                      
                       n_move_out = NA,
-                      in.quara = rep(FALSE, n_time))
+                      in.quara = rep(FALSE, n_time),
+                      sec.level = rep(0, n_time)
+                      )
     out[2:n_time, c("num_S", "num_I", "new_I", "num_R")] <- NA
     out
   })
@@ -334,10 +350,20 @@ makeCityContactMatrix <- function(n_cities, cities = x){
                                colSums(city_contact_matrix),
                                FUN="/")
   #check for quarantined cities
-  #browser()
   inx.q <- which(cities$in.quara == 1)
   if(length(inx.q)>0 ){
-    city_contact_matrix[inx.q, ] = city_contact_matrix[inx.q, ] * 0.1
+    #browser()
+    for( i in 1:length(inx.q)){
+      if(cities$sec.level[cities$city_id==inx.q[i]] == 2){
+      city_contact_matrix[inx.q[i], ] = city_contact_matrix[inx.q[i], ] * 0.1
+      }
+      else if(cities$sec.level[cities$city_id==inx.q] == 1){
+        city_contact_matrix[inx.q[i], ] = city_contact_matrix[inx.q[i], ] * 0.35
+      }
+      else{
+        city_contact_matrix[inx.q[i], ] = city_contact_matrix[inx.q[i], ] * 0.45
+      }
+    }
   }
   return(city_contact_matrix)
 }
@@ -345,15 +371,127 @@ makeCityContactMatrix <- function(n_cities, cities = x){
 plotCitiesOverTime <- function(out, alpha = alpha) {
   ggplot() +
     geom_line(data = out,
-              aes(x = day, y = I, group = interaction(city_id, itr)),
-              alpha = alpha,
-              col = "darkred") +
-    theme_minimal()
+              aes(x = day, y = I,
+                  group = interaction(city_id, itr),
+                  col = as.factor(city_id)),
+              alpha = alpha) +
+    theme_minimal() +
+    theme(legend.position = "none")
 }
 
 
+plotMeanInfection <- function(out){
+  plots <- list()
+  for(i in 1:max(out$city_id)){  
+    plots[[i]] <- ggplot(data = out[out$city_id==i,], aes(x = day, y = I)) +
+    stat_summary(aes(y = I, group=1), fun.y=mean, colour=i, geom="line", group=1) +
+    theme_minimal()
+  }
+  return(plots)
+}
+
+# in.quara.city1 <- data.frame(
+#           itr1 = rep(0, n_days),
+#           itr2 = rep(0, n_days),
+#           itr3 = rep(0, n_days),
+#           itr4 = rep(0, n_days),
+#           itr5 = rep(0, n_days),
+#           itr6 = rep(0, n_days),
+#           itr7 = rep(0, n_days),
+#           itr8 = rep(0, n_days),
+#           itr9 = rep(0, n_days),
+#           itr10 = rep(0, n_days),
+#           itr11 = rep(0, n_days),
+#           itr12 = rep(0, n_days)
+#            )
+# 
+# 
+# 
+# mdf <- melt(out[out$city_id==1,], id.vars=c("day", "itr"), measure.var = c("in.quara"))
+# mdf[mdf$day ==1,]
+# 
+# 
+# cdf <- cast(mdf, day )
+# head(cdf)
+# 
+# 
+# cdf$in.quara <- as.integer(cdf$in.quara)
+# 
+# ggplot(data = cdf$in.quara[])
+# 
+# city.1 <- data.frame(day = 1:length(unique(cdf$day)),
+#                      in.quara = rep(0, length(unique(cdf$day))))
+# for(i in 1:length(unique(cdf$day))){
+#   temp = vector(length =12, mode = "integer")
+#   temp2 <- cdf[cdf$day==i,]
+#   print(temp2)
+#   for(n in 1:length(unique(cdf$itr))){
+#     length(cdf$in.quara[cdf$itr==n])
+#     # temp[n] <- 
+#   }
+#     #city.1$in.quara[i] <- Mode(temp)
+# }
+
+# reshapeOutput <- function(out){
+#   mdf <- melt(out, id.vars=c("day","city_id","itr"), measure.vars = c("S", "I", "new_I"))
+# }
+# 
+# 
+# 
+# cdf <- cast(mdf, formular = day + day + itr ~ variable)
+# ggplot(data = cdf, aes(x = day, y = I)) + 
+#   stat_summary(aes(y = I, col=cdf$city_id), fun.y=mean, geom="line") 
+#   
+###------- From reposetory ------ ######
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  require(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
 
 
-
-
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
 

@@ -1,7 +1,8 @@
 # Within-city infection
-# library(pacman)
-# pacman::p_load(magrittr, tidyverse, purr)
-# pacman::p_loaded() # Check loaded packages
+library(pacman)
+pacman::p_load(magrittr, tidyverse, purr)
+pacman::p_loaded() # Check loaded packages
+library(ggplot2)
 rm(list = ls())
 source("quarantine-functions.R")
 # Each day is composed of two steps:
@@ -41,24 +42,32 @@ city <- makeCity(n_people, n_time = n_days,
 # infectionByMovement(movement, city)
 # RUN MODEL ----------------------------------------------------------------
 set.seed(13)
-out <- loopOverDays(x = city, n_steps = n_days, n_cities = n_cities,
-             frac_travel = fraction_who_travel)
+# out <- loopOverDays(x = city, n_steps = n_days, n_cities = n_cities,
+#              frac_travel = fraction_who_travel, start.quarantine = 75, end.quarantine = 10)
+# 
+# out
+# sum(out$in.quara)
 
-
-
-
-itr <- 12
+itr <- 2
 out_raw <- map(1:itr, function(x){
   loopOverDays(x = city, n_steps = n_days, n_cities = n_cities,
-               frac_travel = fraction_who_travel)
-} )
+               frac_travel = fraction_who_travel, start.quarantine = 75, end.quarantine = 10)
+  } 
+)
 
 out <- prettyOutput(out_raw, itr, n_days, n_cities)
-out[which.max(out$I), ]
+head(out)
+plot(out$I[out$city_id==1], type ="l")
 
+
+
+interaction()
 # ggploting is sloooow with large number of lines. May take ~30 secs.
 plotCitiesOverTime(out, alpha = .1)
+plots <- plotMeanInfection(out)
+multiplot(plots)
 
-#
+
+
 cum_I <- cumInfected(out_raw)
 hist(cum_I)
