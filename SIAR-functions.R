@@ -71,7 +71,7 @@ loopOverDays <- function(x = city,
                                       beta_A = beta_A)
       
       # Make sure sensible numbers
-      stopifnot(!any(step1_output$num_I > step1_output$tot_N))
+      if(any(step1_output$num_I > step1_output$tot_N)) browser()
       
       # Step 2 - Move Infected
       if(travel==TRUE){
@@ -80,8 +80,10 @@ loopOverDays <- function(x = city,
                                          contact_matrix,
                                          frac_travel = frac_travel)
         # Increment by 1 timse-step
-        # browser()
-        x[x$day == (i + 1), ] <- step2_output
+        browser()
+        inx <- x$day == (i + 1)
+        # 1:n_days + i *  days
+        x[inx, ] <- step2_output
         
       } else {
         # If we don't simulate travel, only do step 1
@@ -304,7 +306,7 @@ makeCityGravityMatrix <- function(n_cities,
                                   decay = decay){
   # This function creates a matrix showing the normalized contact between all
   # city-pairs.
-
+  
   
   # Calculate the distance matrix describing each city-pair
   dist_mat <- matrix(data = NA, nrow = n_cities, ncol = n_cities)
@@ -386,7 +388,7 @@ cumInfected <- function(x){
 
 # SUMMARY FUNCTIONS -------------------------------------------------------
 
-summarizeCityI <- function(x){
+summarizeCityI <- function(x, n_cities){
   # browser()
   out <- split(x, list(x$city_id, x$itr))
   z <- lapply(out, function(x) sum(x$new_I)) %>%
@@ -429,16 +431,16 @@ propInfectPerItr <- function(x){
   
 }
 
-propAllTravel <- function(x){
+propAllTravel <- function(x, n_cities, itr){
   # This function finds the mean proportion of cities infected for each "travel
   # fraction" level tested over. Used t.test to find mean instead of quantile
   # since we want the CI around the mean parameter
   lapply(x, function(i){
     # browser()
     out <-  byDayAndItr(i, itr, n_days, n_cities) %>%
-      summarizeCityI() %>%
+      summarizeCityI(n_cities) %>%
       propInfectPerItr()
-
+    
     # If all values are the same, t.test throws error, so work around
     flag <- all(out$prop_infected == out$prop_infected[1])
     if(flag){
@@ -482,11 +484,13 @@ mapPrepEachDay <- function(x, utm){
 
 
 varMonitor <- function(x, itr){
+  # x is vector of whatever value needs to be monitored
   var_mon <- numeric(itr)
   # browser()
   for(i in 1:itr){
     var_mon[i] <- var(x[1:i])
   }
+  var_mon <- data.frame(var = var_mon)
   return(var_mon)
 }
 
@@ -550,6 +554,7 @@ makeCityContactMatrix <- function(n_cities){
 # PLOTTING ----------------------------------------------------------------
 
 plotSensitivity <- function(x, value){
+  # browser()
   ggplot() +
     geom_line(data = x,
               aes(x = value, y = mean)) +
@@ -561,12 +566,13 @@ plotSensitivity <- function(x, value){
     theme_minimal() +
     ylab("Mean proportion of \n cities infected")+
     xlab(paste(value)) +
-    ggtitle("Proportion of cities infected") +
+    # ggtitle("Proportion of cities infected") +
     ylim(c(0, 1))
 }
 
 
 mapCities <- function(x){
+  # Static map of the cities
   ggplot() +
     geom_point(data = x,
                aes(x = x_val, y = y_val,
@@ -586,21 +592,26 @@ mapCities <- function(x){
 
 
 mapCitiesByDay <- function(x, data_map){
+  # This function is designed to be looped (or applied) over each day. Creates a
+  # map of the cities where the size is proportional to the AR at that day. The
+  # sizes should be standardized between days.
   # browser()
   ggplot() +
     geom_point(data = data_map[[x]],
                aes(x = x_val, y = y_val,
-                   size = tot_N,
+                   size = mean_AR,
                    # col = mean_newA,
-                   col = mean_AR)) + 
-    scale_colour_distiller(name = "Mean AR rate \nper 100 people",
-                           palette = "Spectral",
-                           limits=c(0,10)) +
+                   col = tot_N)) + 
+    scale_size_continuous(name = "Mean AR", range = c(1, 6),
+                          breaks = c(0,1,2,4,8, 10)) +
     geom_point(data = data_map[[x]][(data_map[[x]]$num_I == 0 & data_map[[x]]$num_R==0), ],
-               aes(x = x_val, y = y_val,
-                   size = tot_N),
-               col = "pink") +
+               aes(x = x_val, y = y_val),
+               col = "grey") +
+    scale_colour_distiller(name = "City Population",
+                           palette = "Spectral",
+                           limits=c(0,170000)) +
     theme_minimal() +
+    theme(legend.position = "none") + 
     ggtitle(paste0("Day:", x, sep=" "))
   # browser()
   print(paste0("saving plot ", x))
@@ -621,3 +632,11 @@ plotCitiesOverTime <- function(out, alpha = alpha) {
     theme(legend.position = "none")
 }
 
+varPlot <- function(x, title){
+  # Plots the variance (y-axis) against number of iterations (x-axis)
+  ggplot() +
+    geom_line(data = x, aes(x = 1:nrow(x), y = var)) +
+    theme_classic() + 
+    xlab("Iterations") + 
+    ggtitle(paste(title))
+}
